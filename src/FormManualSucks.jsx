@@ -176,7 +176,7 @@ const FormManualSucks = () => {
       },
     });
 
-    doc.save("absensi.pdf");
+    doc.save(`Absensi ISTE - ${nama}_${npp}`);
   };
 
   return (
