@@ -200,6 +200,9 @@ const FormManualSucks = () => {
       headStyles: {
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
+        cellWidth: "wrap",
+        halign: "center",
+        valign: "middle",
       },
 
       alternateRowStyles: {
@@ -218,9 +221,9 @@ const FormManualSucks = () => {
       head: [
         [
           "No",
-          "Hari / Tanggal (PDF)",
-          "Jam Datang (PDF)",
-          "Jam Pulang (PDF)",
+          "Hari / Tanggal",
+          "Jam Datang",
+          "Jam Pulang",
           "TTD Peserta",
           "TTD Mentor",
         ],
@@ -363,45 +366,49 @@ const FormManualSucks = () => {
 
       {records.length > 0 && (
         <>
-          <table className="w-full border border-collapse text-sm mb-6">
-            <thead>
-              <tr className="border">
-                <th className="border p-2">No</th>
-                <th className="border p-2">Tanggal</th>
-                <th className="border p-2">Datang</th>
-                <th className="border p-2">Pulang</th>
-                <th className="border p-2">TTD Peserta</th>
-                <th className="border p-2">TTD Mentor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r, i) => (
-                <tr key={i}>
-                  <td className="border p-2 text-center">{i + 1}</td>
-                  <td className="border p-2">{formatDate(r.tgl)}</td>
-                  <td className="border p-2 text-center">{r.datang}</td>
-                  <td className="border p-2 text-center">{r.pulang}</td>
-                  <td className="border p-2 text-center">
-                    {signature && (
-                      <img src={signature} className="h-8 mx-auto" />
-                    )}
-                  </td>
-                  <td className="border p-2 text-center">
-                    {mentorSignature && (
-                      <img src={mentorSignature} className="h-8 mx-auto" />
-                    )}
-                  </td>
+          <div className="max-h-[420px] overflow-y-auto border rounded mb-6">
+            <table className="w-full border-collapse text-sm">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr>
+                  <th className="border p-2">No</th>
+                  <th className="border p-2">Tanggal</th>
+                  <th className="border p-2">Datang</th>
+                  <th className="border p-2">Pulang</th>
+                  <th className="border p-2">TTD Peserta</th>
+                  <th className="border p-2">TTD Mentor</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {records.map((r, i) => (
+                  <tr key={i}>
+                    <td className="border p-2 text-center">{i + 1}</td>
+                    <td className="border p-2">{formatDate(r.tgl)}</td>
+                    <td className="border p-2 text-center">{r.datang}</td>
+                    <td className="border p-2 text-center">{r.pulang}</td>
+                    <td className="border p-2 text-center">
+                      {signature && (
+                        <img src={signature} className="h-8 mx-auto" />
+                      )}
+                    </td>
+                    <td className="border p-2 text-center">
+                      {mentorSignature && (
+                        <img src={mentorSignature} className="h-8 mx-auto" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          <button
-            onClick={handleExport}
-            className="bg-blue-600 text-white px-6 py-2 rounded"
-          >
-            Export PDF
-          </button>
+          <div className="flex justify-end">
+            <button
+              onClick={handleExport}
+              className="bg-blue-600 text-white px-6 py-2 rounded cursor-pointer hover:bg-blue-700 active:scale-95 transition"
+            >
+              Export PDF
+            </button>
+          </div>
         </>
       )}
     </div>
