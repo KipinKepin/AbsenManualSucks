@@ -1,361 +1,408 @@
 import React, { useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as pdfjsLib from "pdfjs-dist";
+import "pdfjs-dist/build/pdf.worker.min";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.js",
+  import.meta.url,
+).toString();
+
+const MONTH_MAP = {
+  Januari: 0,
+  Februari: 1,
+  Maret: 2,
+  April: 3,
+  Mei: 4,
+  Juni: 5,
+  Juli: 6,
+  Agustus: 7,
+  September: 8,
+  Oktober: 9,
+  November: 10,
+  Desember: 11,
+};
+
+const parseIndoDate = (str) => {
+  const [d, m, y] = str.split(" ");
+  return new Date(y, MONTH_MAP[m], d);
+};
 
 const FormManualSucks = () => {
   const [nama, setNama] = useState("");
   const [npp, setNpp] = useState("");
-  const lokasi = "Jakarta Barat";
-  const [range, setRange] = useState({ start: "", end: "" });
-  const [records, setRecords] = useState([]);
-  const [currentDate, setCurrentDate] = useState(null);
-  const [form, setForm] = useState({ datang: "", pulang: "" });
-  const [showModal, setShowModal] = useState(false);
-  const [signature, setSignature] = useState(null);
+  const [lokasi, setLokasi] = useState("");
 
-  const parseDateInput = (dateString) => {
-    const [year, month, day] = dateString.split("-").map(Number);
-    return new Date(year, month - 1, day);
+  const [records, setRecords] = useState([]);
+  const [signature, setSignature] = useState(null);
+  const [mentorSignature, setMentorSignature] = useState(null);
+
+  const loadPdfItems = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+    let items = [];
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+
+      content.items.forEach((it) => {
+        items.push({
+          text: it.str.trim(),
+          x: it.transform[4],
+          y: it.transform[5],
+        });
+      });
+    }
+
+    return items;
   };
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString("id-ID", {
+  const parseAttendanceByColumn = (items) => {
+    const COL = {
+      tanggal: [40, 220],
+      datang: [300, 360],
+      pulang: [380, 460],
+    };
+
+    const rowsMap = {};
+
+    items.forEach((it) => {
+      const y = Math.round(it.y);
+      if (!rowsMap[y]) rowsMap[y] = [];
+      rowsMap[y].push(it);
+    });
+
+    const rows = [];
+
+    Object.values(rowsMap).forEach((row) => {
+      let tanggal = null;
+      let datang = "-";
+      let pulang = "-";
+
+      row.forEach(({ text, x }) => {
+        if (
+          x >= COL.tanggal[0] &&
+          x <= COL.tanggal[1] &&
+          /\d{1,2} \w+ \d{4}/.test(text)
+        ) {
+          tanggal = parseIndoDate(text);
+        }
+
+        if (
+          x >= COL.datang[0] &&
+          x <= COL.datang[1] &&
+          /^\d{2}:\d{2}/.test(text)
+        ) {
+          datang = text.slice(0, 5);
+        }
+
+        if (
+          x >= COL.pulang[0] &&
+          x <= COL.pulang[1] &&
+          /^\d{2}:\d{2}/.test(text)
+        ) {
+          pulang = text.slice(0, 5);
+        }
+      });
+
+      if (tanggal) rows.push({ tgl: tanggal, datang, pulang });
+    });
+
+    return rows.sort((a, b) => a.tgl - b.tgl);
+  };
+
+  const handleUploadPDF = async (e) => {
+    const files = Array.from(e.target.files);
+    let merged = [];
+
+    for (const file of files) {
+      const items = await loadPdfItems(file);
+      merged.push(...parseAttendanceByColumn(items));
+    }
+
+    setRecords(merged);
+  };
+
+  const readImage = (file, setter) => {
+    const reader = new FileReader();
+    reader.onload = () => setter(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const formatDate = (date) =>
+    date.toLocaleDateString("id-ID", {
       weekday: "long",
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-  };
 
-  const handleGenerate = () => {
-    if (!range.start || !range.end) return;
-    const start = parseDateInput(range.start);
-    const end = parseDateInput(range.end);
-    if (start > end) return alert("Tanggal mulai harus <= tanggal akhir");
-    setCurrentDate(start);
-    setRecords([]);
-    setForm({ datang: "", pulang: "" });
-    setShowModal(true);
-  };
+  const drawImageCentered = (doc, img, cell) => {
+    const props = doc.getImageProperties(img);
 
-  const handleSave = () => {
-    if (!form.datang || !form.pulang)
-      return alert("Isi jam datang dan pulang dulu!");
-    if (form.datang > form.pulang)
-      return alert("Jam datang tidak boleh lebih besar dari jam pulang!");
-    const newRecord = {
-      tgl: new Date(currentDate),
-      datang: form.datang,
-      pulang: form.pulang,
-      paraf: signature,
-    };
-    setRecords([...records, newRecord]);
-    moveNextDay();
-  };
+    const padding = 3;
 
-  const handleLibur = () => {
-    const newRecord = {
-      tgl: new Date(currentDate),
-      datang: "-",
-      pulang: "-",
-      paraf: signature,
-    };
-    setRecords([...records, newRecord]);
-    moveNextDay();
-  };
+    const maxW = cell.width - padding * 2;
+    const maxH = cell.height - padding * 2;
 
-  const moveNextDay = () => {
-    const next = new Date(currentDate);
-    next.setDate(next.getDate() + 1);
-    const end = parseDateInput(range.end);
-    if (next <= end) {
-      setCurrentDate(next);
-      setForm({ datang: "", pulang: "" });
-      setShowModal(true);
-    } else {
-      setCurrentDate(null);
-      setShowModal(false);
-    }
-  };
+    const ratio = Math.min(maxW / props.width, maxH / props.height);
 
-  const handleSignatureUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSignature(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
+    const w = props.width * ratio;
+    const h = props.height * ratio;
+
+    const x = cell.x + (cell.width - w) / 2;
+    const y = cell.y + (cell.height - h) / 2;
+
+    doc.addImage(img, "PNG", x, y, w, h);
   };
 
   const handleExport = () => {
-    if (!nama || !npp) return alert("Isi Nama dan NPP dulu!");
+    if (!nama || !npp || !lokasi) return alert("Lengkapi data");
 
     const doc = new jsPDF();
+
     doc.setFontSize(12);
-    doc.setFont("", "bold");
-    doc.text("ABSENSI ISTE ODP 326", 105, 32, {
-      align: "center",
-      fontWeight: "bold",
-    });
-    doc.setFont("", "normal");
-    doc.setFont("", "");
+    doc.text("ABSENSI ISTE ODP 326", 105, 25, { align: "center" });
+
     doc.setFontSize(10);
-    doc.text(`Nama                                      : ${nama}`, 14, 52);
-    doc.text(`NPP                                        : ${npp}`, 14, 58);
-    doc.text(`Lokasi ISTE                           : ${lokasi}`, 14, 64);
+    const lx = 14,
+      cx = 40,
+      vx = 44;
 
-    doc.setFontSize(9);
-    doc.text("ODP 326 Information Technology", 14, 72);
-
-    const tableData = records.map((rec, idx) => [
-      idx + 1,
-      formatDate(rec.tgl),
-      rec.datang,
-      rec.pulang,
-      rec.paraf ? "signed" : "",
-      "",
-    ]);
+    doc.text("Nama", lx, 40);
+    doc.text(":", cx, 40);
+    doc.text(nama, vx, 40);
+    doc.text("NPP", lx, 46);
+    doc.text(":", cx, 46);
+    doc.text(npp, vx, 46);
+    doc.text("Lokasi", lx, 52);
+    doc.text(":", cx, 52);
+    doc.text(lokasi, vx, 52);
 
     autoTable(doc, {
-      startY: 78,
+      startY: 60,
+
+      pageBreak: "auto",
+      rowPageBreak: "avoid",
+
+      styles: {
+        minCellHeight: 22,
+        valign: "middle",
+        lineWidth: 0.2,
+        lineColor: [0, 0, 0],
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+      },
+
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+      },
+
+      alternateRowStyles: {
+        fillColor: [255, 255, 255],
+      },
+
+      columnStyles: {
+        0: { cellWidth: 10, halign: "center", valign: "middle" },
+        1: { cellWidth: 55, valign: "middle" },
+        2: { cellWidth: 35, halign: "center", valign: "middle" },
+        3: { cellWidth: 35, halign: "center", valign: "middle" },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 30 },
+      },
+
       head: [
         [
           "No",
-          "Hari/Tanggal",
-          "Jam\nKedatangan",
-          "Jam\nPulang",
-          "Paraf",
-          "Paraf Atasan",
+          "Hari / Tanggal (PDF)",
+          "Jam Datang (PDF)",
+          "Jam Pulang (PDF)",
+          "TTD Peserta",
+          "TTD Mentor",
         ],
       ],
-      body: tableData,
-      columnStyles: {
-        0: { cellWidth: 10 },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 40 },
-        5: { cellWidth: 40 },
-      },
-      headStyles: {
-        fontSize: 8,
-        halign: "center",
-        valign: "middle",
-        lineWidth: 0.2,
-        lineColor: [0, 0, 0],
-        fillColor: false,
-        textColor: [0, 0, 0],
-      },
-      bodyStyles: {
-        fontSize: 8,
-        cellPadding: 3,
-        minCellHeight: 20,
-        halign: "center",
-        valign: "middle",
-        lineWidth: 0.2,
-        lineColor: [0, 0, 0],
-      },
-      styles: {
-        lineColor: [0, 0, 0],
-        lineWidth: 0.2,
-      },
-      didDrawCell: (data) => {
-        if (data.column.index === 4 && data.cell.section === "body") {
-          const record = records[data.row.index];
-          if (record.paraf) {
-            const imgW = data.cell.width - 6;
-            const imgH = data.cell.height - 6;
-            const x = data.cell.x + (data.cell.width - imgW) / 2;
-            const y = data.cell.y + (data.cell.height - imgH) / 2;
 
-            doc.addImage(record.paraf, "PNG", x, y, imgW, imgH);
-          }
+      body: records.map((r, i) => [
+        i + 1,
+        formatDate(r.tgl),
+        r.datang,
+        r.pulang,
+        "",
+        "",
+      ]),
+
+      didDrawCell: (data) => {
+        if (data.section !== "body") return;
+
+        if (data.column.index === 4 && signature) {
+          drawImageCentered(doc, signature, data.cell);
         }
+
+        if (data.column.index === 5 && mentorSignature) {
+          drawImageCentered(doc, mentorSignature, data.cell);
+        }
+      },
+
+      didDrawPage: () => {
+        const h = doc.internal.pageSize.height;
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, h - 2, 210, 2, "F");
       },
     });
 
-    doc.save(`Absensi ISTE - ${nama}_${npp}`);
+    doc.save(`Absensi_${nama}_${npp}.pdf`);
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto font-sans">
-      <h1 className="text-center text-3xl font-extrabold mb-8 text-blue-700">
-        ABSENSI ODP
+    <div className="p-6 max-w-6xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6 text-center">
+        ABSENSI ODP (AUTO PDF)
       </h1>
 
-      <div className="grid grid-cols-3 gap-6 mb-8">
-        <div>
-          <label className="block mb-1 font-medium">Nama:</label>
-          <input
-            type="text"
-            value={nama}
-            placeholder="input nama"
-            onChange={(e) => setNama(e.target.value)}
-            className="w-full border p-2 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block mb-1 font-medium">NPP:</label>
-          <input
-            type="text"
-            value={npp}
-            placeholder="input npp"
-            onChange={(e) => setNpp(e.target.value)}
-            className="w-full border p-2 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block mb-1 font-medium">Lokasi:</label>
-          <input
-            type="text"
-            value={lokasi}
-            disabled
-            className="w-full border p-2 rounded-lg bg-gray-100 text-gray-600"
-          />
-        </div>
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <input
+          value={nama}
+          onChange={(e) => setNama(e.target.value)}
+          placeholder="Nama"
+          className="border p-2 rounded"
+        />
+        <input
+          value={npp}
+          onChange={(e) => setNpp(e.target.value)}
+          placeholder="NPP"
+          className="border p-2 rounded"
+        />
+        <input
+          value={lokasi}
+          onChange={(e) => setLokasi(e.target.value)}
+          placeholder="Lokasi"
+          className="border p-2 rounded"
+        />
       </div>
 
-      <div className="mb-8 flex flex-wrap items-center gap-4">
-        <div>
-          <label className="mr-2 block font-medium">Tanggal Mulai:</label>
+      <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="border rounded-lg p-4 bg-white shadow-sm">
+          <label className="block text-sm font-semibold mb-1">
+            📄 PDF Absensi IHCS
+          </label>
+          <p className="text-xs text-gray-500 mb-3">
+            Upload satu atau beberapa file PDF absensi
+          </p>
           <input
-            type="date"
-            value={range.start}
-            onChange={(e) => setRange({ ...range, start: e.target.value })}
-            className="border p-2 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="mr-2 block font-medium">Tanggal Akhir:</label>
-          <input
-            type="date"
-            value={range.end}
-            onChange={(e) => setRange({ ...range, end: e.target.value })}
-            className="border p-2 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
+            type="file"
+            multiple
+            accept="application/pdf"
+            onChange={handleUploadPDF}
+            className="block w-full text-sm
+        file:mr-3 file:py-2 file:px-4
+        file:rounded-md file:border-0
+        file:bg-blue-600 file:text-white
+        hover:file:bg-blue-700
+        cursor-pointer"
           />
         </div>
 
-        <div>
-          <label className=" mr-2 block font-medium">Add Signature:</label>
+        <div className="border rounded-lg p-4 bg-white shadow-sm">
+          <label className="block text-sm font-semibold mb-1">
+            ✍️ Tanda Tangan Peserta
+          </label>
+          <p className="text-xs text-gray-500 mb-3">
+            Digunakan pada kolom <b>TTD Peserta</b>
+          </p>
           <input
             type="file"
             accept="image/*"
-            onChange={handleSignatureUpload}
-            className="bg-red-100 p-1"
+            onChange={(e) => readImage(e.target.files[0], setSignature)}
+            className="block w-full text-sm
+        file:mr-3 file:py-2 file:px-4
+        file:rounded-md file:border-0
+        file:bg-gray-700 file:text-white
+        hover:file:bg-gray-800
+        cursor-pointer"
           />
+          {signature && (
+            <img
+              src={signature}
+              alt="Preview TTD Peserta"
+              className="mt-3 h-12 object-contain border rounded p-1 mx-auto"
+            />
+          )}
         </div>
 
-        <button
-          onClick={handleGenerate}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-md transition w-full sm:w-auto flex flex-1 justify-center"
-        >
-          Generate
-        </button>
+        <div className="border rounded-lg p-4 bg-white shadow-sm">
+          <label className="block text-sm font-semibold mb-1">
+            🧑‍🏫 Tanda Tangan Mentor
+          </label>
+          <p className="text-xs text-gray-500 mb-3">
+            Digunakan pada kolom <b>TTD Mentor</b>
+          </p>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => readImage(e.target.files[0], setMentorSignature)}
+            className="block w-full text-sm
+        file:mr-3 file:py-2 file:px-4
+        file:rounded-md file:border-0
+        file:bg-gray-700 file:text-white
+        hover:file:bg-gray-800
+        cursor-pointer"
+          />
+          {mentorSignature && (
+            <img
+              src={mentorSignature}
+              alt="Preview TTD Mentor"
+              className="mt-3 h-12 object-contain border rounded p-1 mx-auto"
+            />
+          )}
+        </div>
       </div>
 
-      {records.length === 0 && !currentDate && (
-        <p className="text-center text-gray-500">Belum ada data</p>
-      )}
-
       {records.length > 0 && (
-        <div className="overflow-x-auto mb-8">
-          <table className="w-full border-collapse border rounded-lg shadow-sm text-sm sm:text-base">
+        <>
+          <table className="w-full border border-collapse text-sm mb-6">
             <thead>
-              <tr className="bg-gradient-to-r from-blue-500 to-blue-700 text-white">
-                <th className="border px-3 py-3 min-h-[40px]">No</th>
-                <th className="border px-3 py-3 min-h-[40px]">Hari/Tanggal</th>
-                <th className="border px-3 py-3 min-h-[40px]">
-                  Jam Kedatangan
-                </th>
-                <th className="border px-3 py-3 min-h-[40px]">Jam Pulang</th>
-                <th className="border px-3 py-3 min-h-[40px]">Paraf</th>
-                <th className="border px-3 py-3 min-h-[40px]">Paraf Atasan</th>
+              <tr className="border">
+                <th className="border p-2">No</th>
+                <th className="border p-2">Tanggal</th>
+                <th className="border p-2">Datang</th>
+                <th className="border p-2">Pulang</th>
+                <th className="border p-2">TTD Peserta</th>
+                <th className="border p-2">TTD Mentor</th>
               </tr>
             </thead>
             <tbody>
-              {records.map((rec, idx) => (
-                <tr
-                  key={idx}
-                  className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}
-                >
-                  <td className="border px-3 py-3 text-center">{idx + 1}</td>
-                  <td className="border px-3 py-3">{formatDate(rec.tgl)}</td>
-                  <td className="border px-3 py-3 text-center">{rec.datang}</td>
-                  <td className="border px-3 py-3 text-center">{rec.pulang}</td>
-                  <td className="border px-3 py-3 text-center">
-                    {rec.paraf && (
-                      <img
-                        src={rec.paraf}
-                        alt="signature"
-                        className="mx-auto h-10 w-20 object-contain"
-                      />
+              {records.map((r, i) => (
+                <tr key={i}>
+                  <td className="border p-2 text-center">{i + 1}</td>
+                  <td className="border p-2">{formatDate(r.tgl)}</td>
+                  <td className="border p-2 text-center">{r.datang}</td>
+                  <td className="border p-2 text-center">{r.pulang}</td>
+                  <td className="border p-2 text-center">
+                    {signature && (
+                      <img src={signature} className="h-8 mx-auto" />
                     )}
                   </td>
-                  <td className="border px-3 py-3"></td>
+                  <td className="border p-2 text-center">
+                    {mentorSignature && (
+                      <img src={mentorSignature} className="h-8 mx-auto" />
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
 
-      {records.length > 0 && (
-        <button
-          onClick={handleExport}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg shadow-lg block mx-auto transition"
-        >
-          Export PDF
-        </button>
-      )}
-
-      {showModal && currentDate && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-white/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4 text-center text-blue-700">
-              {formatDate(currentDate)}
-            </h2>
-            <div className="mb-4">
-              <label className="block mb-1 font-medium">Jam Datang:</label>
-              <input
-                type="time"
-                value={form.datang}
-                onChange={(e) => setForm({ ...form, datang: e.target.value })}
-                className="border p-2 rounded-lg w-full shadow-sm focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block mb-1 font-medium">Jam Pulang:</label>
-              <input
-                type="time"
-                value={form.pulang}
-                onChange={(e) => setForm({ ...form, pulang: e.target.value })}
-                className="border p-2 rounded-lg w-full shadow-sm focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div className="flex flex-wrap gap-3 justify-between">
-              <button
-                onClick={handleSave}
-                className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow-md transition flex-1"
-              >
-                Simpan
-              </button>
-              <button
-                onClick={handleLibur}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-2 rounded-lg shadow-md transition flex-1"
-              >
-                Libur
-              </button>
-              <button
-                onClick={() => setShowModal(false)}
-                className="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg shadow-md transition flex-1"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
+          <button
+            onClick={handleExport}
+            className="bg-blue-600 text-white px-6 py-2 rounded"
+          >
+            Export PDF
+          </button>
+        </>
       )}
     </div>
   );
