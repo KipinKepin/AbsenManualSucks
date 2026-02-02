@@ -65,6 +65,7 @@ const FormManualSucks = () => {
       tanggal: [40, 220],
       datang: [300, 360],
       pulang: [380, 460],
+      workTime: [470, 550],
     };
 
     const rowsMap = {};
@@ -79,8 +80,9 @@ const FormManualSucks = () => {
 
     Object.values(rowsMap).forEach((row) => {
       let tanggal = null;
-      let datang = "-";
-      let pulang = "-";
+      let datang = "";
+      let pulang = "";
+      let workTime = "";
 
       row.forEach(({ text, x }) => {
         if (
@@ -106,9 +108,42 @@ const FormManualSucks = () => {
         ) {
           pulang = text.slice(0, 5);
         }
+
+        if (x >= COL.workTime[0] && x <= COL.workTime[1]) {
+          workTime = text.trim();
+        }
       });
 
-      if (tanggal) rows.push({ tgl: tanggal, datang, pulang });
+      if (!tanggal) return;
+
+      const day = tanggal.getDay();
+      const isWeekend = day === 0 || day === 6;
+      const isLibur = workTime === "-";
+
+      const hasCheckin = datang && datang !== "-";
+      const hasCheckout = pulang && pulang !== "-";
+
+      if (isWeekend) {
+        if (!hasCheckin && !hasCheckout) {
+          return;
+        }
+
+        if (!hasCheckin) datang = "08:00";
+        if (!hasCheckout) pulang = "18:00";
+
+        rows.push({ tgl: tanggal, datang, pulang });
+        return;
+      }
+
+      if (isLibur) {
+        rows.push({ tgl: tanggal, datang: "-", pulang: "-" });
+        return;
+      }
+
+      if (!hasCheckin) datang = "08:00";
+      if (!hasCheckout) pulang = "18:00";
+
+      rows.push({ tgl: tanggal, datang, pulang });
     });
 
     return rows.sort((a, b) => a.tgl - b.tgl);
