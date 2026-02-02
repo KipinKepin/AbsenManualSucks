@@ -296,7 +296,7 @@ const FormManualSucks = () => {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto max-h-screen">
       <h1 className="text-2xl font-bold mb-6 text-center">
         ABSENSI ODP (AUTO PDF)
       </h1>
@@ -401,7 +401,7 @@ const FormManualSucks = () => {
 
       {records.length > 0 && (
         <>
-          <div className="max-h-[420px] overflow-y-auto border rounded mb-6">
+          <div className="max-h-[380px] overflow-y-auto border rounded mb-6">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 bg-white z-10">
                 <tr>
