@@ -171,6 +171,7 @@ const FormManualSucks = () => {
       merged.push(...parseAttendanceByColumn(items));
     }
 
+    merged.sort((a, b) => a.tgl - b.tgl);
     setRecords(merged);
   };
 
