@@ -3,6 +3,21 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/build/pdf.worker.min";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  Table,
+  TableRow,
+  TableCell,
+  TextRun,
+  WidthType,
+  AlignmentType,
+  VerticalAlign,
+  ImageRun,
+  BorderStyle,
+} from "docx";
+import { saveAs } from "file-saver";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.js",
@@ -308,6 +323,213 @@ const FormManualSucks = () => {
     doc.save(`Absensi_${nama}_${npp}.pdf`);
   };
 
+  const base64ToUint8Array = (base64) => {
+    const base64Data = base64.split(",")[1];
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  const handleExportDocx = async () => {
+    if (!nama || !npp || !lokasi) return alert("Lengkapi data");
+
+    const headerRow = new TableRow({
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "No", bold: true })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          verticalAlign: VerticalAlign.CENTER,
+          width: { size: 5, type: WidthType.PERCENTAGE },
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "Hari / Tanggal", bold: true })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          verticalAlign: VerticalAlign.CENTER,
+          width: { size: 30, type: WidthType.PERCENTAGE },
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "Jam Datang", bold: true })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          verticalAlign: VerticalAlign.CENTER,
+          width: { size: 15, type: WidthType.PERCENTAGE },
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "Jam Pulang", bold: true })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          verticalAlign: VerticalAlign.CENTER,
+          width: { size: 15, type: WidthType.PERCENTAGE },
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "TTD Peserta", bold: true })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          verticalAlign: VerticalAlign.CENTER,
+          width: { size: 17.5, type: WidthType.PERCENTAGE },
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "TTD Mentor", bold: true })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          verticalAlign: VerticalAlign.CENTER,
+          width: { size: 17.5, type: WidthType.PERCENTAGE },
+        }),
+      ],
+    });
+
+    const dataRows = records.map((r, i) => {
+      const signatureImage = signature
+        ? new ImageRun({
+            data: base64ToUint8Array(signature),
+            transformation: { width: 50, height: 30 },
+          })
+        : null;
+
+      const mentorImage = mentorSignature
+        ? new ImageRun({
+            data: base64ToUint8Array(mentorSignature),
+            transformation: { width: 50, height: 30 },
+          })
+        : null;
+
+      return new TableRow({
+        children: [
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: String(i + 1) })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: formatDate(r.tgl) })],
+              }),
+            ],
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: r.datang })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: r.pulang })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: signatureImage ? [signatureImage] : [],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: mentorImage ? [mentorImage] : [],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+        ],
+      });
+    });
+
+    const table = new Table({
+      rows: [headerRow, ...dataRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.SINGLE, size: 1 },
+        bottom: { style: BorderStyle.SINGLE, size: 1 },
+        left: { style: BorderStyle.SINGLE, size: 1 },
+        right: { style: BorderStyle.SINGLE, size: 1 },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 1 },
+        insideVertical: { style: BorderStyle.SINGLE, size: 1 },
+      },
+    });
+
+    const doc = new Document({
+      sections: [
+        {
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({ text: "ABSENSI ISTE ODP 326", bold: true, size: 28 }),
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 300 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "Nama\t\t: ", bold: true }),
+                new TextRun({ text: nama }),
+              ],
+              spacing: { after: 100 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "NPP\t\t: ", bold: true }),
+                new TextRun({ text: npp }),
+              ],
+              spacing: { after: 100 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "Lokasi\t\t: ", bold: true }),
+                new TextRun({ text: lokasi }),
+              ],
+              spacing: { after: 300 },
+            }),
+            table,
+          ],
+        },
+      ],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `Absensi_${nama}_${npp}.docx`);
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto max-h-screen">
       <h1 className="text-2xl font-bold mb-6 text-center">
@@ -449,12 +671,18 @@ const FormManualSucks = () => {
             </table>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
             <button
               onClick={handleExport}
               className="bg-blue-600 text-white px-6 py-2 rounded cursor-pointer hover:bg-blue-700 active:scale-95 transition"
             >
               Export PDF
+            </button>
+            <button
+              onClick={handleExportDocx}
+              className="bg-green-600 text-white px-6 py-2 rounded cursor-pointer hover:bg-green-700 active:scale-95 transition"
+            >
+              Export DOCX
             </button>
           </div>
         </>
