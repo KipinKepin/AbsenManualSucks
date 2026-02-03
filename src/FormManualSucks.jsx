@@ -69,11 +69,24 @@ const FormManualSucks = () => {
     };
 
     const rowsMap = {};
+    const Y_TOLERANCE = 3; // ini kuncinya
 
     items.forEach((it) => {
-      const y = Math.round(it.y);
-      if (!rowsMap[y]) rowsMap[y] = [];
-      rowsMap[y].push(it);
+      let rowKey = null;
+
+      for (const y in rowsMap) {
+        if (Math.abs(y - it.y) <= Y_TOLERANCE) {
+          rowKey = y;
+          break;
+        }
+      }
+
+      if (rowKey === null) {
+        rowKey = it.y;
+        rowsMap[rowKey] = [];
+      }
+
+      rowsMap[rowKey].push(it);
     });
 
     const rows = [];
