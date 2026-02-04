@@ -505,7 +505,11 @@ const FormManualSucks = () => {
           children: [
             new Paragraph({
               children: [
-                new TextRun({ text: "ABSENSI ISTE ODP 326", bold: true, size: 28 }),
+                new TextRun({
+                  text: "ABSENSI ISTE ODP 326",
+                  bold: true,
+                  size: 28,
+                }),
               ],
               alignment: AlignmentType.CENTER,
               spacing: { after: 300 },
@@ -546,8 +550,9 @@ const FormManualSucks = () => {
       <h1 className="text-2xl font-bold mb-6 text-center">
         ABSENSI ODP (AUTO PDF)
       </h1>
+      <small>*note: gunakan resolusi 80-90%</small>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-4 my-6">
         <input
           value={nama}
           onChange={(e) => setNama(e.target.value)}

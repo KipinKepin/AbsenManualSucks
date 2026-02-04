@@ -4,7 +4,7 @@ import "./index.css";
 import Footer from "./Footer";
 const App = () => {
   return (
-    <div>
+    <div className="flex flex-col justify-between min-h-screen">
       <FormManualSucks />
       <Footer />
     </div>
