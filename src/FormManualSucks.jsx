@@ -69,7 +69,7 @@ const FormManualSucks = () => {
     };
 
     const rowsMap = {};
-    const Y_TOLERANCE = 3; // ini kuncinya
+    const Y_TOLERANCE = 3;
 
     items.forEach((it) => {
       let rowKey = null;
@@ -129,9 +129,11 @@ const FormManualSucks = () => {
 
       if (!tanggal) return;
 
+      const startDate = new Date(tanggal.getFullYear(), 8, 15);
+      if (tanggal < startDate) return;
+
       const day = tanggal.getDay();
       const isWeekend = day === 0 || day === 6;
-      const isLibur = workTime === "-";
 
       const hasCheckin = datang && datang !== "-";
       const hasCheckout = pulang && pulang !== "-";
@@ -145,6 +147,14 @@ const FormManualSucks = () => {
         if (!hasCheckout) pulang = "18:00";
 
         rows.push({ tgl: tanggal, datang, pulang });
+        return;
+      }
+
+      const isLibur =
+        /^(LIB|LIBUR|-)$/.test(workTime.toUpperCase()) ||
+        row.some(({ text }) => /^(LIB|LIBUR)$/i.test(text.trim()));
+
+      if (isLibur && !hasCheckin) {
         return;
       }
 
