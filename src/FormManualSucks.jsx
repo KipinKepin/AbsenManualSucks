@@ -144,7 +144,7 @@ const FormManualSucks = () => {
 
       if (!tanggal) return;
 
-      const startDate = new Date(tanggal.getFullYear(), 8, 15);
+      const startDate = new Date(2025, 8, 15);
       if (tanggal < startDate) return;
 
       const day = tanggal.getDay();
@@ -233,7 +233,7 @@ const FormManualSucks = () => {
     doc.addImage(img, "PNG", x, y, w, h);
   };
 
-  const handleExport = () => {
+  const handleExport = ({ withMentorSign = true } = {}) => {
     if (!nama || !npp || !lokasi) return alert("Lengkapi data");
 
     const doc = new jsPDF();
@@ -256,8 +256,14 @@ const FormManualSucks = () => {
     doc.text(":", cx, 52);
     doc.text(lokasi, vx, 52);
 
+    const pageWidth = doc.internal.pageSize.width;
+    const tableWidth = 190;
+    const marginLeft = (pageWidth - tableWidth) / 2;
+
     autoTable(doc, {
       startY: 60,
+      tableWidth,
+      margin: { left: marginLeft },
 
       pageBreak: "auto",
       rowPageBreak: "avoid",
@@ -319,7 +325,7 @@ const FormManualSucks = () => {
           drawImageCentered(doc, signature, data.cell);
         }
 
-        if (data.column.index === 5 && mentorSignature) {
+        if (data.column.index === 5 && mentorSignature && withMentorSign) {
           drawImageCentered(doc, mentorSignature, data.cell);
         }
       },
@@ -344,7 +350,7 @@ const FormManualSucks = () => {
     return bytes;
   };
 
-  const handleExportDocx = async () => {
+  const handleExportDocx = async ({ withMentorSign = true } = {}) => {
     if (!nama || !npp || !lokasi) return alert("Lengkapi data");
 
     const headerRow = new TableRow({
@@ -420,12 +426,13 @@ const FormManualSucks = () => {
           })
         : null;
 
-      const mentorImage = mentorSignature
-        ? new ImageRun({
-            data: base64ToUint8Array(mentorSignature),
-            transformation: { width: 50, height: 30 },
-          })
-        : null;
+      const mentorImage =
+        mentorSignature && withMentorSign
+          ? new ImageRun({
+              data: base64ToUint8Array(mentorSignature),
+              transformation: { width: 50, height: 30 },
+            })
+          : null;
 
       return new TableRow({
         children: [
@@ -546,7 +553,7 @@ const FormManualSucks = () => {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto max-h-screen">
+    <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-center">
         ABSENSI ODP (AUTO PDF)
       </h1>
@@ -689,14 +696,33 @@ const FormManualSucks = () => {
 
           <div className="flex justify-end gap-3">
             <button
+              onClick={() => handleExport({ withMentorSign: false })}
+              className="bg-gray-600 text-white px-6 py-2 rounded
+      hover:bg-gray-700 active:scale-95 transition"
+            >
+              Export PDF (tanpa TTD Mentor)
+            </button>
+
+            <button
               onClick={handleExport}
-              className="bg-blue-600 text-white px-6 py-2 rounded cursor-pointer hover:bg-blue-700 active:scale-95 transition"
+              className="bg-blue-600 text-white px-6 py-2 rounded
+      hover:bg-blue-700 active:scale-95 transition"
             >
               Export PDF
             </button>
+
+            <button
+              onClick={() => handleExportDocx({ withMentorSign: false })}
+              className="bg-emerald-600 text-white px-6 py-2 rounded
+      hover:bg-emerald-700 active:scale-95 transition"
+            >
+              Export DOCX (tanpa TTD Mentor)
+            </button>
+
             <button
               onClick={handleExportDocx}
-              className="bg-green-600 text-white px-6 py-2 rounded cursor-pointer hover:bg-green-700 active:scale-95 transition"
+              className="bg-green-600 text-white px-6 py-2 rounded
+      hover:bg-green-700 active:scale-95 transition"
             >
               Export DOCX
             </button>
